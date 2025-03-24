@@ -300,9 +300,7 @@ function categorize_hrefs(hrefs, url)
     {
         if (!href) return;
         
-        if (href.startsWith('javascript:') || 
-            href.startsWith('mailto:') || 
-            href.startsWith('tel:') ||
+        if (href.includes(':') && !['http:', 'https:'].some(protocol => href.startsWith(protocol)) ||
             href.startsWith('#')) {
             return;
         }
