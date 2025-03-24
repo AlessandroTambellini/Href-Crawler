@@ -8,12 +8,17 @@ I'll consider them based on how Node.js considers them.
 So, an URL is an object containing different properties (href, hostname, tags, etc.),
 while a href is a string representing an address (e.g. 'http://example.org') */
 
+/* Given the Event-Driven model of http requests,
+I do not know how to determine a "good" number of concurrent checks. */
+const MAX_CONCURRENT_CHECKS = 20;
+
 const ORIGIN_HREF = process.argv[2];
 
 main();
 
 async function main() 
 {
+    let tot_time = Date.now();
     const visited_hrefs = new Set();
     const url_queue = [];
 
@@ -76,26 +81,37 @@ async function main()
         
         // Verify the validity of the external ones
         debuglog('\tVisiting Externals:');
-        for (const href of external_hrefs) {
-            if (visited_hrefs.has(href)) continue;
-
-            visited_hrefs.add(href);
-            external_links_checked++;
-            debuglog(`\t- ${href}`);
-
-            try {
-                const url = new URL(href);
-                const { is_href_valid, msg } = await check_href_validity(url);
-                if (!is_href_valid) {
-                    console.warn(`[WARN]: Bad response for '${href}' contained in '${curr_url.href}'. Message: ${msg}.`);
-                }
-            } catch (error) {
-                console.error(`(Line ${new Error().stack.split(':')[1]}) [ERROR] at page '${curr_url.href}' for href '${href}'. Message: ${error.message}.`);
-            }
-        }   
+        const unvisited_external_hrefs = external_hrefs.filter(href => !visited_hrefs.has(href));
+        unvisited_external_hrefs.forEach(href => visited_hrefs.add(href));
+        
+        for (let i = 0; i < unvisited_external_hrefs.length; i += MAX_CONCURRENT_CHECKS) 
+        {
+            let time = Date.now();
+            const batch = unvisited_external_hrefs.slice(i, i + MAX_CONCURRENT_CHECKS);
+            const batch_promises = batch.map(href => {
+                debuglog(`\t- ${href}`);
+                return (async () => {
+                    try {
+                        const url = new URL(href);
+                        const { is_href_valid, msg } = await check_href_validity(url);
+                        if (!is_href_valid) {
+                            console.warn(`[WARN]: Bad response for '${href}' contained in '${curr_url.href}'. Message: ${msg}.`);
+                        }
+                    } catch (error) {
+                        console.error(`(Line ${new Error().stack.split(':')[1]}) [ERROR] at page '${curr_url.href}' for href '${href}'. Message: ${error.message}.`);
+                    }
+                })();
+            });
+        
+            await Promise.all(batch_promises);
+            console.log(Date.now() - time);
+        }
+        
+        external_links_checked += unvisited_external_hrefs.length;
     }
 
     console.log(`[INFO]: pages crawled: ${pages_crawled}, external links checked: ${external_links_checked}.`);
+    console.log('tot time', Date.now()-tot_time);
 }
 
 /**
@@ -132,6 +148,9 @@ function check_href_validity(url) {
             });
             
             res.on('end', () => {
+                /* Sometimes I get a 404, but the page actually exists. 
+                And I get the same result by opening the link in the browser.
+                So, I guess there is something misconfigured in their server. */
                 if (res.statusCode === 404 || res.statusCode === 410 || (res.statusCode >= 500 && res.statusCode <= 599)) {
                     msg = `${res.statusCode}: ${res.statusMessage}`;
                 } else {
@@ -244,7 +263,7 @@ function collect_hrefs(HTML_page)
 
     let match;
     while (match = href_regex.exec(HTML_page)) {
-        hrefs.push(match[2]);
+        hrefs.push(match[2].trim());
     }
     
     return hrefs;
