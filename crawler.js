@@ -194,6 +194,7 @@ function check_href_validity(url) {
         });
 
         req.on('close', () => {
+            req.destroy();
             resolve({ 
                 is_href_valid,
                 msg
@@ -259,6 +260,9 @@ function fetch_HTML_page(url)
         });
         
         req.on('close', () => {
+            /* I noticed that the underlying sockets might remain open, so I explicitely close them.
+            I noticed it because once the crawling was terminated, before the program terminated, 5-10 seconds passed by. */
+            req.destroy(); 
             resolve({
                 HTML_page,
                 msg
