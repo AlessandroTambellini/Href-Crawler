@@ -19,8 +19,6 @@ main();
 async function main() 
 {
     let tot_time = Date.now();
-    const visited_hrefs = new Set();
-    const url_queue = [];
 
     let origin_url = null;
     try {
@@ -30,64 +28,57 @@ async function main()
         return;
     }
 
-    url_queue.push({
+    const url_wrapper = {
         'url': origin_url,
         'parent': null
-    });
-    visited_hrefs.add(ORIGIN_HREF);
+    };
+    const internal_visited = new Set();
+    const external_visited = new Set();
+    const crawling_data = {
+        pages_crawled: 0,
+        external_hrefs_checked: 0
+    };
 
     console.log(`Starting crawling at '${ORIGIN_HREF}'.`);
 
-    let pages_crawled = 0;
-    let external_links_checked = 0;
+    await visit_page(url_wrapper, internal_visited, external_visited, crawling_data);
 
-    while (url_queue.length > 0) 
-    {
-        const curr_url_wrapper = url_queue.shift();
-        const curr_url = curr_url_wrapper.url;
-        visited_hrefs.add(curr_url.href);
-        pages_crawled++;
+    console.log(`[INFO]: Pages crawled: ${crawling_data.pages_crawled}`);
+    console.log(`[INFO]: External hrefs checked: ${crawling_data.external_hrefs_checked}`);
+    console.log(`[INFO]: Crawling duration: ${((Date.now() - tot_time) / 1000).toFixed(2)}s`);
+}
 
-        const { HTML_page, msg } = await fetch_HTML_page(curr_url);
+async function visit_page(url_wrapper, internal_visited, external_visited, crawling_data) 
+{
+    const url = url_wrapper.url;
+    const { HTML_page, msg } = await fetch_HTML_page(url);
+    internal_visited.add(url.href);
 
         if (!HTML_page && msg) {
-            console.error(`(Line ${new Error().stack.split(':')[1]}) [ERROR] at page '${curr_url_wrapper.parent}' for href '${curr_url.href}'. Message: ${msg}.`);
-            continue;
+        console.error(`[ERROR] at page '${url_wrapper.parent}' for href '${url.href}'. Message: ${msg}.`);
+        return;
         } else if (!HTML_page && !msg) {
-            debuglog(`[INFO] at page '${curr_url_wrapper.parent}' for href '${curr_url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
-            continue;
+        debuglog(`At page '${url_wrapper.parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
+        return;
         }
+
+    crawling_data.pages_crawled += 1;
 
         const hrefs = collect_hrefs(HTML_page);
-        const { internal_hrefs, external_hrefs } = categorize_hrefs(hrefs, curr_url);
-        debuglog(`'${curr_url.href}': found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
+    const { internal_hrefs, external_hrefs } = categorize_hrefs(hrefs, url);
+    debuglog(`'${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
 
-        // Push the internal ones in the queue
-        for (const href of internal_hrefs) {
-            try {
-                // Resolve a relative URL to the absolute one
-                let abs_url = new URL(href, curr_url.href);
-                if (!visited_hrefs.has(abs_url.href)) {
-                    url_queue.push({ 
-                        'url': abs_url,
-                        'parent': curr_url.href
-                    });
-                    visited_hrefs.add(abs_url.href);
-                }
-            } catch (error) {
-                console.error(`(Line ${new Error().stack.split(':')[1]}) [ERROR] '${curr_url.href}': the href '${href}' is not valid. Message: ${error}.`);
-            }
-        }
-        
-        // Verify the validity of the external ones
+    /* 
+     * 
+     * Verify the validity of the external ones 
+     */
         debuglog('\tVisiting Externals:');
-        const unvisited_external_hrefs = external_hrefs.filter(href => !visited_hrefs.has(href));
-        unvisited_external_hrefs.forEach(href => visited_hrefs.add(href));
+    const unchecked_external_hrefs = external_hrefs.filter(href => !external_visited.has(href));
+    unchecked_external_hrefs.forEach(href => external_visited.add(href));
         
-        for (let i = 0; i < unvisited_external_hrefs.length; i += MAX_CONCURRENT_CHECKS) 
+    for (let i = 0; i < unchecked_external_hrefs.length; i += MAX_CONCURRENT_EXTERNAL) 
         {
-            let time = Date.now();
-            const batch = unvisited_external_hrefs.slice(i, i + MAX_CONCURRENT_CHECKS);
+        const batch = unchecked_external_hrefs.slice(i, i + MAX_CONCURRENT_EXTERNAL);
             const batch_promises = batch.map(href => {
                 debuglog(`\t- ${href}`);
                 return (async () => {
@@ -95,23 +86,48 @@ async function main()
                         const url = new URL(href);
                         const { is_href_valid, msg } = await check_href_validity(url);
                         if (!is_href_valid) {
-                            console.warn(`[WARN]: Bad response for '${href}' contained in '${curr_url.href}'. Message: ${msg}.`);
+                        console.warn(`[WARN]: Bad response for '${href}' contained in '${url.href}'. Message: ${msg}.`);
                         }
                     } catch (error) {
-                        console.error(`(Line ${new Error().stack.split(':')[1]}) [ERROR] at page '${curr_url.href}' for href '${href}'. Message: ${error.message}.`);
+                    console.error(`[ERROR] at page '${url.href}' for href '${href}'. Message: ${error.message}.`);
                     }
                 })();
             });
         
             await Promise.all(batch_promises);
-            console.log(Date.now() - time);
+    }
+    
+    crawling_data.external_hrefs_checked += unchecked_external_hrefs.length;
+
+    /* 
+     *
+     * Verify the validity of the internal ones
+     */
+    const internal_to_visit = [];
+    for (const href of internal_hrefs) {
+        try {
+            // Resolve a relative URL to the absolute one
+            let abs_url = new URL(href, url.href);
+            if (!internal_visited.has(abs_url.href)) {
+                internal_to_visit.push({ 
+                    'url': abs_url,
+                    'parent': url.href
+                });
+            }
+        } catch (error) {
+            console.error(`[ERROR] '${url.href}': the href '${href}' is not valid. Message: ${error}.`);
         }
-        
-        external_links_checked += unvisited_external_hrefs.length;
     }
 
-    console.log(`[INFO]: pages crawled: ${pages_crawled}, external links checked: ${external_links_checked}.`);
-    console.log('tot time', Date.now()-tot_time);
+    for (let i = 0; i < internal_to_visit.length; i += MAX_CONCURRENT_INTERNAL) 
+    {
+        const batch = internal_to_visit.slice(i, i + MAX_CONCURRENT_INTERNAL);
+        const batch_promises = batch.map(url_wrapper => {
+            return visit_page(url_wrapper, internal_visited, external_visited, crawling_data);
+        });
+
+        await Promise.all(batch_promises);
+    }
 }
 
 /**
