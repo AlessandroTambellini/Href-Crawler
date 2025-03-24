@@ -323,7 +323,7 @@ function categorize_hrefs(hrefs, url)
                 internal_hrefs.push(href);
             }
         } catch (error) {
-            console.error(`(Line ${new Error().stack.split(':')[1]}) [ERROR] at page '${url.href}' for href '${href}': ${error.message}.`);
+            console.error(`[ERROR] at page '${url.href}' for href '${href}': ${error.message}.`);
         }
     });
         
