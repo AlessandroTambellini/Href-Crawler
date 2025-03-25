@@ -67,7 +67,7 @@ async function crawl_site(origin_url, internal_visited, external_visited, crawli
     }
     
     if (crawling_data.pages_crawled >= MAX_PAGES) {
-        console.log(`[INFO]: Reached maximum page limit (${MAX_PAGES}). Stopping crawler.`);
+        console.log(`[INFO]: Reached maximum number of crawlable pages (${MAX_PAGES}).`);
     }
 }
 
@@ -80,12 +80,12 @@ async function crawl_page(item, queue, internal_visited, external_visited, crawl
     }
     
     const { HTML_page, msg } = await fetch_HTML_page(url);
-    
+
     if (!HTML_page && msg) {
-        console.error(`[ERROR] at page '${parent}' for href '${url.href}'. Message: ${msg}.`);
+        console.error(`[ERROR]: At page '${parent}' for href '${url.href}'. Message: ${msg}.`);
         return;
     } else if (!HTML_page && !msg) {
-        debuglog(`At page '${parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
+        debuglog(`[INFO]: At page '${parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
         return;
     }
 
@@ -93,8 +93,8 @@ async function crawl_page(item, queue, internal_visited, external_visited, crawl
     
     const hrefs = collect_hrefs(HTML_page);
     const { internal_hrefs, external_hrefs } = categorize_hrefs(hrefs, url);
-    // console.log(item);
-    debuglog(`'${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
+
+    debuglog(`[INFO]: At page '${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
 
     // Process external links
     await check_external_links(external_hrefs, url.href, external_visited, crawling_data);
@@ -113,14 +113,13 @@ async function crawl_page(item, queue, internal_visited, external_visited, crawl
                 internal_visited.add(abs_url.href);
             }
         } catch (error) {
-            console.error(`[ERROR] '${url.href}': the href '${href}' is not valid. Message: ${error}.`);
+            console.error(`[ERROR]: At page '${url.href}': the href '${href}' is not valid. Message: ${error}.`);
         }
     }
 }
 
 async function check_external_links(external_hrefs, page_href, external_visited, crawling_data)
 {
-    debuglog('\tVisiting Externals:');
     const unchecked_external_hrefs = external_hrefs.filter(href => !external_visited.has(href));
     unchecked_external_hrefs.forEach(href => external_visited.add(href));
     
@@ -128,7 +127,6 @@ async function check_external_links(external_hrefs, page_href, external_visited,
     {
         const batch = unchecked_external_hrefs.slice(i, i + MAX_CONCURRENT_EXTERNAL);
         const batch_promises = batch.map(href => {
-            debuglog(`\t- ${href}`);
             return (async () => {
                 try {
                     const url = new URL(href);
@@ -137,7 +135,7 @@ async function check_external_links(external_hrefs, page_href, external_visited,
                         console.warn(`[WARN]: Bad response for '${href}' contained in '${page_href}'. Message: ${msg}.`);
                     }
                 } catch (error) {
-                    console.error(`[ERROR] at page '${page_href}' for href '${href}'. Message: ${error.message}.`);
+                    console.error(`[ERROR]: At page '${page_href}' for href '${href}'. Message: ${error.message}.`);
                 }
             })();
         });
@@ -362,7 +360,7 @@ function categorize_hrefs(hrefs, url)
                 internal_hrefs.push(href);
             }
         } catch (error) {
-            console.error(`[ERROR] at page '${url.href}' for href '${href}': ${error.message}.`);
+            console.error(`[ERROR]: At page '${url.href}' for href '${href}': ${error.message}.`);
         }
     });
         
