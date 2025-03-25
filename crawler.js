@@ -140,7 +140,7 @@ function check_href_validity(url) {
     {
         const options = {
             method: 'HEAD', // I just have to verify the validity
-            timeout: 5000
+            timeout: 2000,
         };
 
         const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
@@ -210,7 +210,7 @@ function fetch_HTML_page(url)
     {
         let options = {
             method: 'GET',
-            timeout: 5000
+            timeout: 2000,
         };
 
         const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
