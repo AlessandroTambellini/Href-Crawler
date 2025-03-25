@@ -153,12 +153,15 @@ async function check_external_links(external_hrefs, page_href, external_visited,
  * @param {URL} url 
  * @returns {Promise<boolean>}
  */
-function check_href_validity(url) {
+function check_href_validity(url, redirections = 0) {
     return new Promise((resolve) => 
     {
         const options = {
             method: 'HEAD', // I just have to verify the validity
-            timeout: 2000,
+            timeout: 5000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+            }
         };
         
         const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
@@ -181,20 +184,36 @@ function check_href_validity(url) {
                 chunks.push(chunk);
             });
             
-            res.on('end', () => {
+            res.on('end', async () => {
                 /* Sometimes I get a 404, but the page actually exists. 
                 And I get the same result by opening the link in the browser.
                 So, I guess there is something misconfigured in their server. */
                 if (res.statusCode === 404 || res.statusCode === 410 || (res.statusCode >= 500 && res.statusCode <= 599)) {
                     msg = `${res.statusCode}: ${res.statusMessage}`;
+                } else if (res.statusCode === 301) {
+                    // I set a max number of redirections
+                    if (res.headers.location && redirections < 5) {
+                        try {
+                            debuglog(`[INFO]: Redirected from '${url.href}' to '${res.headers.location}'`);
+                            let redirection_url = new URL(res.headers.location);
+                            let redirection_res = await check_href_validity(redirection_url, redirections+1);
+                            msg = redirection_res.msg;
+                            is_href_valid = redirection_res.is_href_valid;    
+                        } catch (error) {
+                            msg = error.message;
+                        }
+                    } else {
+                        msg = `Exceeded max number of redirections allowed`;
+                    }
                 } else {
                     /* 
                     - X sends back a 403 in case of a HEAD request.
-                    - LinkedIn sends back a 999 because of the User-Agent. 
+                    - LinkedIn sends back a 999 because of the User-Agent or accept-encoding or something like that. 
                     So, even though they may seem bad responses, they are actually expected.
                     So, I consider bad just the ones listed above. */
                     is_href_valid = true;
                 }
+                resolve({ is_href_valid, msg });
             });
         });
         
@@ -203,17 +222,18 @@ function check_href_validity(url) {
             f_event_handled = true;
             msg = 'timeout';
             req.destroy();
+            resolve({ is_href_valid, msg });
         });
         
         req.on('error', (err) => {
             if (f_event_handled) return;
             f_event_handled = true;
             msg = err.message;
+            resolve({ is_href_valid, msg });
         });
 
         req.on('close', () => {
             req.destroy();
-            resolve({ is_href_valid, msg });
         });
     });
 }
@@ -228,7 +248,7 @@ function fetch_HTML_page(url)
     {
         let options = {
             method: 'GET',
-            timeout: 2000,
+            timeout: 5000,
         };
 
         const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
