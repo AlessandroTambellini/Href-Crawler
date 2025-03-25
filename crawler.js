@@ -314,16 +314,24 @@ function categorize_hrefs(hrefs, url)
     {
         if (!href) return;
 
-        if (href.match(/^[^:]+:/) && !href.match(/^https?:/)) {
-            return;
-        }
+        // Discard page-internal links
+        if (href.startsWith('#')) return;
 
         try {
-            if (href.includes('://') || href.startsWith('//')) 
+            if (href.includes(':') || href.startsWith('//')) 
             {
                 // Handle protocol-relative URLs
                 const integral_href = href.startsWith('//') ? `${url.protocol}${href}` : href;
                 const href_url = new URL(integral_href);
+
+                if (!['http:', 'https:'].includes(href_url.protocol)) {
+                    return;
+                }
+
+                // Do not visit internal links of the same page
+                if (href_url.hostname + href_url.pathname === url.hostname + url.pathname) {
+                    return;
+                }
                 
                 if (href_url.hostname === url.hostname) {
                     internal_hrefs.push(integral_href);
