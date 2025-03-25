@@ -142,19 +142,19 @@ function check_href_validity(url) {
             method: 'HEAD', // I just have to verify the validity
             timeout: 5000
         };
-        
-        let is_href_valid = false;
-        let msg = null;
 
         const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
         const req = module_to_use.request(url, options);
         req.end();
 
-        let f_res_already_catched = false;
+        let is_href_valid = false;
+        let msg = null;
+
+        let f_event_handled = false;   
 
         req.on('response', (res) => {
-            if (f_res_already_catched) return;
-            f_res_already_catched = true;
+            if (f_event_handled) return;
+            f_event_handled = true;
             
             res.setEncoding('utf8');
             
@@ -181,24 +181,21 @@ function check_href_validity(url) {
         });
         
         req.on('timeout', () => {
-            if (f_res_already_catched) return;
-            f_res_already_catched = true;
+            if (f_event_handled) return;
+            f_event_handled = true;
             msg = 'timeout';
             req.destroy();
         });
         
         req.on('error', (err) => {
-            if (f_res_already_catched) return;
-            f_res_already_catched = true;
+            if (f_event_handled) return;
+            f_event_handled = true;
             msg = err.message;
         });
 
         req.on('close', () => {
             req.destroy();
-            resolve({ 
-                is_href_valid,
-                msg
-            });
+            resolve({ is_href_valid, msg });
         });
     });
 }
@@ -220,13 +217,14 @@ function fetch_HTML_page(url)
         let req = module_to_use.request(url, options);
         req.end();
         
-        let f_res_already_catched = false;
         let HTML_page = null;
         let msg = null;    
         
+        let f_event_handled = false;    
+        
         req.on('response', res => {
-            if (f_res_already_catched) return;
-            f_res_already_catched = true;
+            if (f_event_handled) return;
+            f_event_handled = true;
 
             res.setEncoding('utf8');
             
@@ -246,27 +244,21 @@ function fetch_HTML_page(url)
         });
         
         req.on('timeout', () => {
-            if (f_res_already_catched) return;
-            f_res_already_catched = true;
+            if (f_event_handled) return;
+            f_event_handled = true;
             msg = 'timeout';
             req.destroy();
         });
         
-        req.on('error', (err) => 
-        {
-            if (f_res_already_catched) return;
-            f_res_already_catched = true;
+        req.on('error', (err) => {
+            if (f_event_handled) return;
+            f_event_handled = true;
             msg = err.message;
         });
         
         req.on('close', () => {
-            /* I noticed that the underlying sockets might remain open, so I explicitely close them.
-            I noticed it because once the crawling was terminated, before the program terminated, 5-10 seconds passed by. */
             req.destroy(); 
-            resolve({
-                HTML_page,
-                msg
-            });
+            resolve({ HTML_page, msg });
         });
     });
 }
