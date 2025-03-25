@@ -304,8 +304,7 @@ function categorize_hrefs(hrefs, url)
     {
         if (!href) return;
         
-        if (href.includes(':') && !['http:', 'https:'].some(protocol => href.startsWith(protocol)) ||
-            href.startsWith('#')) {
+        if (href.match(/^[^:]+:/) && !href.match(/^https?:/)) {
             return;
         }
 
