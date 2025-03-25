@@ -10,7 +10,11 @@ while a href is a string representing an address (e.g. 'http://example.org') */
 
 /* Given the Event-Driven model of http requests,
 I do not know how to determine a "good" number of concurrent checks. */
-const MAX_CONCURRENT_CHECKS = 20;
+const MAX_CONCURRENT_EXTERNAL = 20;
+const MAX_CONCURRENT_INTERNAL = 10;
+const MAX_CRAWLING_DEPTH = 5;
+const MAX_PAGES = 1000;
+// ==> max pending requests = MAX_CONCURRENT_INTERNAL * MAX_CONCURRENT_EXTERNAL
 
 const ORIGIN_HREF = process.argv[2];
 
@@ -28,10 +32,6 @@ async function main()
         return;
     }
 
-    const url_wrapper = {
-        'url': origin_url,
-        'parent': null
-    };
     const internal_visited = new Set();
     const external_visited = new Set();
     const crawling_data = {
@@ -41,93 +41,111 @@ async function main()
 
     console.log(`Starting crawling at '${ORIGIN_HREF}'.`);
 
-    await visit_page(url_wrapper, internal_visited, external_visited, crawling_data);
+    await crawl_site(origin_url, internal_visited, external_visited, crawling_data);
 
     console.log(`[INFO]: Pages crawled: ${crawling_data.pages_crawled}`);
     console.log(`[INFO]: External hrefs checked: ${crawling_data.external_hrefs_checked}`);
     console.log(`[INFO]: Crawling duration: ${((Date.now() - tot_time) / 1000).toFixed(2)}s`);
 }
 
-async function visit_page(url_wrapper, internal_visited, external_visited, crawling_data) 
+async function crawl_site(origin_url, internal_visited, external_visited, crawling_data)
 {
-    const url = url_wrapper.url;
-    const { HTML_page, msg } = await fetch_HTML_page(url);
-    internal_visited.add(url.href);
+    const queue = [{
+        url: origin_url,
+        parent: null,
+        depth: 0
+    }];
 
-        if (!HTML_page && msg) {
-        console.error(`[ERROR] at page '${url_wrapper.parent}' for href '${url.href}'. Message: ${msg}.`);
-        return;
-        } else if (!HTML_page && !msg) {
-        debuglog(`At page '${url_wrapper.parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
-        return;
-        }
-
-    crawling_data.pages_crawled += 1;
-
-        const hrefs = collect_hrefs(HTML_page);
-    const { internal_hrefs, external_hrefs } = categorize_hrefs(hrefs, url);
-    debuglog(`'${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
-
-    /* 
-     * 
-     * Verify the validity of the external ones 
-     */
-        debuglog('\tVisiting Externals:');
-    const unchecked_external_hrefs = external_hrefs.filter(href => !external_visited.has(href));
-    unchecked_external_hrefs.forEach(href => external_visited.add(href));
+    internal_visited.add(origin_url);
+    
+    while (queue.length > 0 && crawling_data.pages_crawled < MAX_PAGES) 
+    {
+        const batch = queue.splice(0, Math.min(MAX_CONCURRENT_INTERNAL, queue.length, MAX_PAGES - crawling_data.pages_crawled));    
+        const batch_promises = batch.map(item => crawl_page(item, queue, internal_visited, external_visited, crawling_data));
         
-    for (let i = 0; i < unchecked_external_hrefs.length; i += MAX_CONCURRENT_EXTERNAL) 
-        {
-        const batch = unchecked_external_hrefs.slice(i, i + MAX_CONCURRENT_EXTERNAL);
-            const batch_promises = batch.map(href => {
-                debuglog(`\t- ${href}`);
-                return (async () => {
-                    try {
-                        const url = new URL(href);
-                        const { is_href_valid, msg } = await check_href_validity(url);
-                        if (!is_href_valid) {
-                        console.warn(`[WARN]: Bad response for '${href}' contained in '${url.href}'. Message: ${msg}.`);
-                        }
-                    } catch (error) {
-                    console.error(`[ERROR] at page '${url.href}' for href '${href}'. Message: ${error.message}.`);
-                    }
-                })();
-            });
-        
-            await Promise.all(batch_promises);
+        await Promise.all(batch_promises);
     }
     
-    crawling_data.external_hrefs_checked += unchecked_external_hrefs.length;
+    if (crawling_data.pages_crawled >= MAX_PAGES) {
+        console.log(`[INFO]: Reached maximum page limit (${MAX_PAGES}). Stopping crawler.`);
+    }
+}
 
-    /* 
-     *
-     * Verify the validity of the internal ones
-     */
-    const internal_to_visit = [];
+async function crawl_page(item, queue, internal_visited, external_visited, crawling_data)
+{
+    const { url, parent, depth } = item;
+    
+    if (depth > MAX_CRAWLING_DEPTH) {
+        return;
+    }
+    
+    const { HTML_page, msg } = await fetch_HTML_page(url);
+    
+    if (!HTML_page && msg) {
+        console.error(`[ERROR] at page '${parent}' for href '${url.href}'. Message: ${msg}.`);
+        return;
+    } else if (!HTML_page && !msg) {
+        debuglog(`At page '${parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
+        return;
+    }
+
+    crawling_data.pages_crawled += 1;
+    
+    const hrefs = collect_hrefs(HTML_page);
+    const { internal_hrefs, external_hrefs } = categorize_hrefs(hrefs, url);
+    // console.log(item);
+    debuglog(`'${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
+
+    // Process external links
+    await check_external_links(external_hrefs, url.href, external_visited, crawling_data);
+    
+    // Add internal links to the queue with increased depth
     for (const href of internal_hrefs) {
         try {
             // Resolve a relative URL to the absolute one
             let abs_url = new URL(href, url.href);
             if (!internal_visited.has(abs_url.href)) {
-                internal_to_visit.push({ 
-                    'url': abs_url,
-                    'parent': url.href
+                queue.push({ 
+                    url: abs_url,
+                    parent: url.href,
+                    depth: depth + 1
                 });
+                internal_visited.add(abs_url.href);
             }
         } catch (error) {
             console.error(`[ERROR] '${url.href}': the href '${href}' is not valid. Message: ${error}.`);
         }
     }
+}
 
-    for (let i = 0; i < internal_to_visit.length; i += MAX_CONCURRENT_INTERNAL) 
+async function check_external_links(external_hrefs, page_href, external_visited, crawling_data)
+{
+    debuglog('\tVisiting Externals:');
+    const unchecked_external_hrefs = external_hrefs.filter(href => !external_visited.has(href));
+    unchecked_external_hrefs.forEach(href => external_visited.add(href));
+    
+    for (let i = 0; i < unchecked_external_hrefs.length; i += MAX_CONCURRENT_EXTERNAL) 
     {
-        const batch = internal_to_visit.slice(i, i + MAX_CONCURRENT_INTERNAL);
-        const batch_promises = batch.map(url_wrapper => {
-            return visit_page(url_wrapper, internal_visited, external_visited, crawling_data);
+        const batch = unchecked_external_hrefs.slice(i, i + MAX_CONCURRENT_EXTERNAL);
+        const batch_promises = batch.map(href => {
+            debuglog(`\t- ${href}`);
+            return (async () => {
+                try {
+                    const url = new URL(href);
+                    const { is_href_valid, msg } = await check_href_validity(url);
+                    if (!is_href_valid) {
+                        console.warn(`[WARN]: Bad response for '${href}' contained in '${page_href}'. Message: ${msg}.`);
+                    }
+                } catch (error) {
+                    console.error(`[ERROR] at page '${page_href}' for href '${href}'. Message: ${error.message}.`);
+                }
+            })();
         });
-
+    
         await Promise.all(batch_promises);
     }
+    
+    crawling_data.external_hrefs_checked += unchecked_external_hrefs.length;
 }
 
 /**
@@ -142,7 +160,7 @@ function check_href_validity(url) {
             method: 'HEAD', // I just have to verify the validity
             timeout: 2000,
         };
-
+        
         const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
         const req = module_to_use.request(url, options);
         req.end();
@@ -218,7 +236,7 @@ function fetch_HTML_page(url)
         req.end();
         
         let HTML_page = null;
-        let msg = null;    
+        let msg = null;
         
         let f_event_handled = false;    
         
@@ -257,7 +275,7 @@ function fetch_HTML_page(url)
         });
         
         req.on('close', () => {
-            req.destroy(); 
+            req.destroy();
             resolve({ HTML_page, msg });
         });
     });
@@ -295,7 +313,7 @@ function categorize_hrefs(hrefs, url)
     hrefs.forEach(href => 
     {
         if (!href) return;
-        
+
         if (href.match(/^[^:]+:/) && !href.match(/^https?:/)) {
             return;
         }
