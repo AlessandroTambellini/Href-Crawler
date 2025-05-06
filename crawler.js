@@ -306,14 +306,51 @@ function fetch_HTML_page(url)
  */
 function collect_hrefs(HTML_page) 
 {
-    const href_regex = /<a\s+[^>]*?\s*href\s*=\s*(['"])(.*?)\1[^>]*?>/gi;
-    const hrefs = [];
+    let hrefs = [];
+    let input = HTML_page;
+    let cur = 0; // cur stands for cursor
 
-    let match;
-    while (match = href_regex.exec(HTML_page)) {
-        hrefs.push(match[2].trim());
+    while (input[cur]) {
+        // Find and collect the hrefs
+
+        /* Note: I don't check if input[cur+x] is out of bounds ==> cur+x >= input.length,
+        because JS simply returns 'undefined' */
+        if (input[cur] === '<' && input[cur+1] === 'a' && input[cur+2] === ' ') {
+            cur += 3;
+            while (input[cur] !== '>' && input[cur]) { // input[cur] !== undefined ==> still inside the string
+                if (input[cur] === 'h' && input[cur+1] === 'r' && input[cur+2] === 'e' && input[cur+3] === 'f') {        
+                    cur += 4;
+                    // skip possible empty spaces
+                    while (input[cur] === ' ') cur++;
+                    if (input[cur] === '=') {
+                        cur++;
+                        while (input[cur] === ' ') cur++;
+                        
+                        /* I've seen both Chrome and Firefox store the URL in double quotes regardless of how 
+                        is written in the source code:
+                        - "example.com" -> "example.com"
+                        - 'example.com' -> "example.com"
+                        -  example.com  -> "example.com"
+                        */
+                        if (input[cur] === '"') {
+                            cur++;
+                            let href = [];
+                            while (input[cur] !== '"' && input[cur]) {
+                                href.push(input[cur]);
+                                cur++;
+                            }
+                            hrefs.push(href.join(''));
+                        }
+                    }
+                }
+
+                cur++;
+            }
+        }
+
+        cur++;
     }
-    
+
     return hrefs;
 }
 
