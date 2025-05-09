@@ -31,7 +31,8 @@ It takes a URL as a command-line argument and begins crawling from there.
     - For internal links: It recursively visits each **unvisited** page, continuing the crawling process
     - For external links: It performs a HEAD request to verify if the link is valid without downloading content
 
-## Disclaimer
+## Note
 Href Crawler doesn't handle all types of redirection to other locations and it doesn't cover all possible responses.  
 Also, the response back from a server might not be the expected one due to user-agent, encoding, proxy, etc. related stuff.  
-All of this to say that sometimes you may get a warning or an error for pages that from the browser are perfectly loadable.
+All of this to say that sometimes you may get a warning or an error for pages that from the browser are perfectly loadable.  
+A reliable alternative to this toy is [Link Checker](https://validator.w3.org/checklink).
