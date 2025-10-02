@@ -310,6 +310,9 @@ function collect_hrefs(HTML_page)
     let input = HTML_page;
     let cur = 0; // cur stands for cursor
 
+    /* Note: this tokenization process doesn't skip links commented out.
+    E.g. <!-- <a href='http://example.com'>example.com</a> --> */
+
     while (input[cur]) {
         // Find and collect the hrefs
 
