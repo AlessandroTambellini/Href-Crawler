@@ -34,6 +34,7 @@ async function main()
 
     const internal_visited = new Set();
     const external_visited = new Set();
+    
     const crawling_data = {
         pages_crawled: 0,
         external_hrefs_checked: 0
@@ -103,7 +104,7 @@ async function crawl_page(item, queue, internal_visited, external_visited, crawl
     for (const href of internal_hrefs) {
         try {
             // Resolve a relative URL to the absolute one
-            let abs_url = new URL(href, url.href);
+            const abs_url = new URL(href, url.href);
             if (!internal_visited.has(abs_url.href)) {
                 queue.push({ 
                     url: abs_url,
@@ -306,21 +307,26 @@ function fetch_HTML_page(url)
  */
 function collect_hrefs(HTML_page) 
 {
-    let hrefs = [];
-    let input = HTML_page;
+    const hrefs = [];
+    const input = HTML_page;
+    
     let cur = 0; // cur stands for cursor
-
-    /* Note: this tokenization process doesn't skip links commented out.
-    E.g. <!-- <a href='http://example.com'>example.com</a> --> */
-
-    while (input[cur]) {
-        // Find and collect the hrefs
+    while (input[cur]) 
+    {
+        // Skip the comments
+        if (input[cur] === '<' && input[cur+1] === '!' && input[cur+2] === '-' && input[cur+3] === '-')
+        {
+            cur += 4;
+            while (input[cur] && input[cur] !== '-' && input[cur+1] !== '-' && input[cur+2] !== '>')
+                cur++;
+        }
 
         /* Note: I don't check if input[cur+x] is out of bounds ==> cur+x >= input.length,
-        because JS simply returns 'undefined' */
+        because JS simply returns 'undefined' and therefore it evaluates to false anyway. */
         if (input[cur] === '<' && input[cur+1] === 'a' && input[cur+2] === ' ') {
             cur += 3;
-            while (input[cur] !== '>' && input[cur]) { // input[cur] !== undefined ==> still inside the string
+            
+            while (input[cur] && input[cur] !== '>') { // input[cur] !== undefined ==> still inside the string
                 if (input[cur] === 'h' && input[cur+1] === 'r' && input[cur+2] === 'e' && input[cur+3] === 'f') {        
                     cur += 4;
                     // skip possible empty spaces
@@ -329,7 +335,7 @@ function collect_hrefs(HTML_page)
                         cur++;
                         while (input[cur] === ' ') cur++;
                         
-                        /* I've seen both Chrome and Firefox store the URL in double quotes regardless of how 
+                        /* I've noticed both Chrome and Firefox store the URL in double quotes regardless of how 
                         is written in the source code:
                         - "example.com" -> "example.com"
                         - 'example.com' -> "example.com"
@@ -337,7 +343,7 @@ function collect_hrefs(HTML_page)
                         */
                         if (input[cur] === '"') {
                             cur++;
-                            let href = [];
+                            const href = [];
                             while (input[cur] !== '"' && input[cur]) {
                                 href.push(input[cur]);
                                 cur++;
