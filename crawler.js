@@ -326,30 +326,29 @@ function collect_hrefs(HTML_page)
         if (input[cur] === '<' && input[cur+1] === 'a' && input[cur+2] === ' ') {
             cur += 3;
             
-            while (input[cur] && input[cur] !== '>') { // input[cur] !== undefined ==> still inside the string
-                if (input[cur] === 'h' && input[cur+1] === 'r' && input[cur+2] === 'e' && input[cur+3] === 'f') {        
+            while (input[cur] && input[cur] !== '>') // input[cur] !== undefined ==> still inside the string
+            { 
+                if (input[cur] === 'h' && input[cur+1] === 'r' && input[cur+2] === 'e' && input[cur+3] === 'f') 
+                {        
                     cur += 4;
+                    
                     // skip possible empty spaces
                     while (input[cur] === ' ') cur++;
+                    
                     if (input[cur] === '=') {
                         cur++;
                         while (input[cur] === ' ') cur++;
-                        
-                        /* I've noticed both Chrome and Firefox store the URL in double quotes regardless of how 
-                        is written in the source code:
-                        - "example.com" -> "example.com"
-                        - 'example.com' -> "example.com"
-                        -  example.com  -> "example.com"
-                        */
-                        if (input[cur] === '"') {
+
+                        let closing_symbols = [];
+                        if (input[cur] === '"' || input[cur] === '\'') closing_symbols.push(input[cur++]);
+                        else closing_symbols.push([' '], '>');
+
+                        const href = [];
+                        while (input[cur] && !closing_symbols.includes(input[cur])) {
+                            href.push(input[cur]);
                             cur++;
-                            const href = [];
-                            while (input[cur] !== '"' && input[cur]) {
-                                href.push(input[cur]);
-                                cur++;
-                            }
-                            hrefs.push(href.join(''));
                         }
+                        hrefs.push(href.join(''));
                     }
                 }
 
