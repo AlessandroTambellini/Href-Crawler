@@ -12,17 +12,20 @@ while a href is a string representing an address (e.g. 'http://example.org') */
 I do not know how to determine a "good" number of concurrent checks. */
 const MAX_CONCURRENT_EXTERNAL = 20;
 const MAX_CONCURRENT_INTERNAL = 10;
-const MAX_CRAWLING_DEPTH = 5;
-const MAX_PAGES = 1000;
+const MAX_CRAWLING_DEPTH = 3;
+const MAX_PAGES = 100;
 // ==> max pending requests = MAX_CONCURRENT_INTERNAL * MAX_CONCURRENT_EXTERNAL
 
 const ORIGIN_HREF = process.argv[2];
 
-main();
+if (module.id === require.main.id)
+{
+    main();
+}
 
 async function main() 
 {
-    let tot_time = Date.now();
+    let curr_time = Date.now();
 
     let origin_url = null;
     try {
@@ -32,24 +35,24 @@ async function main()
         return;
     }
 
-    const internal_visited = new Set();
-    const external_visited = new Set();
+    const internal_hrefs_visited = new Set();
+    const external_hrefs_visited = new Set();
     
     const crawling_data = {
         pages_crawled: 0,
         external_hrefs_checked: 0
     };
 
-    console.log(`Starting crawling at '${ORIGIN_HREF}'.`);
+    console.log('Crawling from ' + ORIGIN_HREF);
 
-    await crawl_site(origin_url, internal_visited, external_visited, crawling_data);
+    await crawl_site(origin_url, internal_hrefs_visited, external_hrefs_visited, crawling_data);
 
     console.log(`[INFO]: Pages crawled: ${crawling_data.pages_crawled}`);
     console.log(`[INFO]: External hrefs checked: ${crawling_data.external_hrefs_checked}`);
-    console.log(`[INFO]: Crawling duration: ${((Date.now() - tot_time) / 1000).toFixed(2)}s`);
+    console.log(`[INFO]: Crawling duration: ${((Date.now() - curr_time) / 1000).toFixed(2)}s`);
 }
 
-async function crawl_site(origin_url, internal_visited, external_visited, crawling_data)
+async function crawl_site(origin_url, internal_hrefs_visited, external_hrefs_visited, crawling_data)
 {
     const queue = [{
         url: origin_url,
@@ -57,12 +60,12 @@ async function crawl_site(origin_url, internal_visited, external_visited, crawli
         depth: 0
     }];
 
-    internal_visited.add(origin_url);
+    internal_hrefs_visited.add(origin_url);
     
     while (queue.length > 0 && crawling_data.pages_crawled < MAX_PAGES) 
     {
         const batch = queue.splice(0, Math.min(MAX_CONCURRENT_INTERNAL, queue.length, MAX_PAGES - crawling_data.pages_crawled));    
-        const batch_promises = batch.map(item => crawl_page(item, queue, internal_visited, external_visited, crawling_data));
+        const batch_promises = batch.map(item => crawl_page(item, queue, internal_hrefs_visited, external_hrefs_visited, crawling_data));
         
         await Promise.all(batch_promises);
     }
@@ -72,7 +75,7 @@ async function crawl_site(origin_url, internal_visited, external_visited, crawli
     }
 }
 
-async function crawl_page(item, queue, internal_visited, external_visited, crawling_data)
+async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_visited, crawling_data)
 {
     const { url, parent, depth } = item;
     
@@ -98,20 +101,20 @@ async function crawl_page(item, queue, internal_visited, external_visited, crawl
     debuglog(`[INFO]: At page '${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
 
     // Process external links
-    await check_external_links(external_hrefs, url.href, external_visited, crawling_data);
+    await check_external_links(external_hrefs, url.href, external_hrefs_visited, crawling_data);
     
     // Add internal links to the queue with increased depth
     for (const href of internal_hrefs) {
         try {
             // Resolve a relative URL to the absolute one
             const abs_url = new URL(href, url.href);
-            if (!internal_visited.has(abs_url.href)) {
+            if (!internal_hrefs_visited.has(abs_url.href)) {
                 queue.push({ 
                     url: abs_url,
                     parent: url.href,
                     depth: depth + 1
                 });
-                internal_visited.add(abs_url.href);
+                internal_hrefs_visited.add(abs_url.href);
             }
         } catch (error) {
             console.error(`[ERROR]: At page '${url.href}': the href '${href}' is not valid. Message: ${error}.`);
@@ -119,10 +122,10 @@ async function crawl_page(item, queue, internal_visited, external_visited, crawl
     }
 }
 
-async function check_external_links(external_hrefs, page_href, external_visited, crawling_data)
+async function check_external_links(external_hrefs, page_href, external_hrefs_visited, crawling_data)
 {
-    const unchecked_external_hrefs = external_hrefs.filter(href => !external_visited.has(href));
-    unchecked_external_hrefs.forEach(href => external_visited.add(href));
+    const unchecked_external_hrefs = external_hrefs.filter(href => !external_hrefs_visited.has(href));
+    unchecked_external_hrefs.forEach(href => external_hrefs_visited.add(href));
     
     for (let i = 0; i < unchecked_external_hrefs.length; i += MAX_CONCURRENT_EXTERNAL) 
     {
@@ -163,8 +166,8 @@ function check_href_validity(url, redirections = 0) {
             }
         };
         
-        const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
-        const req = module_to_use.request(url, options);
+        const protocol = url.protocol.split(':')[0] === 'http' ? http : https;
+        const req = protocol.request(url, options);
         req.end();
 
         let is_href_valid = false;
@@ -250,8 +253,8 @@ function fetch_HTML_page(url)
             timeout: 5000,
         };
 
-        const module_to_use = url.protocol.split(':')[0] === 'http' ? http : https;
-        let req = module_to_use.request(url, options);
+        const protocol = url.protocol.split(':')[0] === 'http' ? http : https;
+        let req = protocol.request(url, options);
         req.end();
         
         let HTML_page = null;
