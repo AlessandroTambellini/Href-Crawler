@@ -3,6 +3,8 @@ const http = require('http');
 const util = require('node:util');
 const debuglog = util.debuglog('log');
 
+// TODO report dumb links? (<a href="#">link</a>)
+
 /* NOTE: to avoid confusion between an URL and a href, 
 I'll consider them based on how Node.js considers them.
 So, an URL is an object containing different properties (href, hostname, tags, etc.),
@@ -312,6 +314,10 @@ function collect_hrefs(HTML_page)
 {
     const hrefs = [];
     const input = HTML_page;
+
+    const isspace = (char) => {
+        return [' ', '\f', '\n', '\r', '\t', '\v'].includes(char);
+    };
     
     let cur = 0; // cur stands for cursor
     while (input[cur]) 
@@ -326,7 +332,7 @@ function collect_hrefs(HTML_page)
 
         /* Note: I don't check if input[cur+x] is out of bounds ==> cur+x >= input.length,
         because JS simply returns 'undefined' and therefore it evaluates to false anyway. */
-        if (input[cur] === '<' && input[cur+1] === 'a' && input[cur+2] === ' ') {
+        if (input[cur] === '<' && input[cur+1] === 'a' && isspace(input[cur+2])) {
             cur += 3;
             
             while (input[cur] && input[cur] !== '>') // input[cur] !== undefined ==> still inside the string
@@ -336,11 +342,11 @@ function collect_hrefs(HTML_page)
                     cur += 4;
                     
                     // skip possible empty spaces
-                    while (input[cur] === ' ') cur++;
+                    while (isspace(input[cur])) cur++;
                     
                     if (input[cur] === '=') {
                         cur++;
-                        while (input[cur] === ' ') cur++;
+                        while (isspace(input[cur])) cur++;
 
                         let closing_symbols = [];
                         if (input[cur] === '"' || input[cur] === '\'') closing_symbols.push(input[cur++]);
