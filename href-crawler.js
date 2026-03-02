@@ -88,7 +88,7 @@ async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_vi
     const { HTML_page, msg } = await fetch_HTML_page(url);
 
     if (!HTML_page && msg) {
-        console.error(`[ERROR]: At page '${parent}' for href '${url.href}'. Message: ${msg}.`);
+        console.error(`[ERROR]: At page '${parent}' for href '${url.href}'. Message: ${msg}`);
         return;
     } else if (!HTML_page && !msg) {
         debuglog(`[INFO]: At page '${parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
@@ -119,7 +119,7 @@ async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_vi
                 internal_hrefs_visited.add(abs_url.href);
             }
         } catch (error) {
-            console.error(`[ERROR]: At page '${url.href}': the href '${href}' is not valid. Message: ${error}.`);
+            console.error(`[ERROR]: At page '${url.href}': the href '${href}' is not valid. Message: ${error}`);
         }
     }
 }
@@ -138,10 +138,10 @@ async function check_external_links(external_hrefs, page_href, external_hrefs_vi
                     const url = new URL(href);
                     const { is_href_valid, msg } = await check_href_validity(url);
                     if (!is_href_valid) {
-                        console.warn(`[WARN]: Bad response for '${href}' contained in '${page_href}'. Message: ${msg}.`);
+                        console.warn(`[WARN]: Bad response for '${href}' contained in '${page_href}'. Message: ${msg}`);
                     }
                 } catch (error) {
-                    console.error(`[ERROR]: At page '${page_href}' for href '${href}'. Message: ${error.message}.`);
+                    console.error(`[ERROR]: At page '${page_href}' for href '${href}'. Message: ${error.message}`);
                 }
             })();
         });
@@ -350,13 +350,15 @@ function collect_hrefs(HTML_page)
 
                         let closing_symbols = [];
                         if (input[cur] === '"' || input[cur] === '\'') closing_symbols.push(input[cur++]);
-                        else closing_symbols.push([' '], '>');
+                        else closing_symbols.push(' ', '>');
 
                         const href = [];
                         while (input[cur] && !closing_symbols.includes(input[cur])) {
                             href.push(input[cur]);
                             cur++;
                         }
+                        // console.log('\'' + href.join('') + '\'');
+                        
                         hrefs.push(href.join(''));
                     }
                 }
