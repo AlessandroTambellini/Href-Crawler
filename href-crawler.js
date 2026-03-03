@@ -358,7 +358,6 @@ function collect_hrefs(HTML_page)
                             href.push(input[cur]);
                             cur++;
                         }
-                        // console.log('\'' + href.join('') + '\'');
                         
                         hrefs.push(href.join(''));
                     }
@@ -388,6 +387,8 @@ function categorize_hrefs(hrefs, url)
     hrefs.forEach(href => 
     {
         if (!href) return;
+
+        href = href.trim();
 
         // Discard page-internal links
         if (href.startsWith('#')) return;
