@@ -62,7 +62,7 @@ async function crawl_site(origin_url, internal_hrefs_visited, external_hrefs_vis
         depth: 0
     }];
 
-    internal_hrefs_visited.add(origin_url);
+    internal_hrefs_visited.add(origin_url.href);
     
     while (queue.length > 0 && crawling_data.pages_crawled < MAX_PAGES) 
     {
@@ -110,6 +110,7 @@ async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_vi
         try {
             // Resolve a relative URL to the absolute one
             const abs_url = new URL(href, url.href);
+            
             if (!internal_hrefs_visited.has(abs_url.href)) {
                 queue.push({ 
                     url: abs_url,
