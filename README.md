@@ -1,20 +1,18 @@
 # Href Crawler
-Href Crawler checks all links (hrefs) on a website, starting from a specified URL.
-Note that it doesn't read local file, therefore it isn't suitable for local testing.
+Href Crawler checks all links (hrefs) in a website, starting from a specified URL
 
 ## Run
 ```
 node crawler.js <url>
 ```
-
-Alternatively, to view the logs:
+To view the logs:
 ```
 NODE_DEBUG=log node href-crawler.js <url>
 ```
 
 ## Description
 Tool that checks all the hrefs associated with an anchor tag (&lt;a&gt;) in a web page, 
-associated with the specified URL.  
+associated with the specified URL (for local ones, use localhost).  
 Breakdown of its functionality:
 
 1) **Starting point**:
