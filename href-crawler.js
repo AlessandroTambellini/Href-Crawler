@@ -233,7 +233,8 @@ function check_href_validity(url, redirections = 0) {
         req.on('error', (err) => {
             if (f_event_handled) return;
             f_event_handled = true;
-            msg = err.message;
+            // If it's an AggregateError, It isn't possible to directy get err.message
+            msg = `An error has occured while requesting '${url.href}'. Error code: ${err.code}`;
             resolve({ is_href_valid, msg });
         });
 
