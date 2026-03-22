@@ -3,7 +3,7 @@ Href Crawler checks all links (hrefs) in a website, starting from a specified UR
 
 ## Run
 ```
-node crawler.js <url>
+node href-crawler.js <url>
 ```
 To view the logs:
 ```
