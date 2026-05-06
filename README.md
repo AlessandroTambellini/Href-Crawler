@@ -29,4 +29,4 @@ It takes a URL as a command-line argument and begins crawling from there.
 
 ## Note
 Href Crawler doesn't handle all types of redirection to other locations and it doesn't cover all possible responses.
-Also, the response back from a server might not be the expected one due to user-agent, encoding, proxy, etc. related stuff. This is to say that sometimes you may get a warning or an error for pages that from the browser are perfectly loadable and therefore this is more of a tool for personal usage; Indeed I use it to check for broken links in my website once in a while.
+Also, the response back from a server might not be the expected one due to user-agent, encoding, proxy, etc. related stuff. This is to say that sometimes you may get a warning or an error for pages that from the browser are perfectly loadable and therefore this is more of a tool for personal usage; Indeed, I use it to check for broken links in my website once in a while.

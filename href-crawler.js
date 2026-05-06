@@ -3,12 +3,14 @@ const http = require('http');
 const util = require('node:util');
 const debuglog = util.debuglog('log');
 
-// TODO report dumb links? (<a href="#">link</a>)
+const ERROR = '\x1b[1;31mERROR\x1b[0m';
+const WARN = '\x1b[38;5;214mWARN\x1b[0m';
+const INFO = '\x1b[30mINFO\x1b[0m';
 
 /* NOTE: to avoid confusion between an URL and a href, 
 I'll consider them based on how Node.js considers them.
 So, an URL is an object containing different properties (href, hostname, tags, etc.),
-while a href is a string representing an address (e.g. 'http://example.org') */
+while an href is a string representing an address (e.g. 'http://example.org') */
 
 /* Given the Event-Driven model of http requests,
 I do not know how to determine a "good" number of concurrent checks. */
@@ -33,7 +35,7 @@ async function main()
     try {
         origin_url = new URL(ORIGIN_HREF);
     } catch (error) {
-        console.error(`[ERROR]: '${ORIGIN_HREF}' is not a valid URL.`);
+        console.error(`${ERROR}: '${ORIGIN_HREF}' is not a valid URL.`);
         return;
     }
 
@@ -49,9 +51,9 @@ async function main()
 
     await crawl_site(origin_url, internal_hrefs_visited, external_hrefs_visited, crawling_data);
 
-    console.log(`[INFO]: Pages crawled: ${crawling_data.pages_crawled}`);
-    console.log(`[INFO]: External hrefs checked: ${crawling_data.external_hrefs_checked}`);
-    console.log(`[INFO]: Crawling duration: ${((Date.now() - curr_time) / 1000).toFixed(2)}s`);
+    console.log(`${INFO}: Pages crawled: \x1b[1m${crawling_data.pages_crawled}\x1b[0m`);
+    console.log(`${INFO}: External hrefs checked: \x1b[1m${crawling_data.external_hrefs_checked}\x1b[0m`);
+    console.log(`${INFO}: Crawling duration: \x1b[1m${((Date.now() - curr_time) / 1000).toFixed(2)}s\x1b[0m`);
 }
 
 async function crawl_site(origin_url, internal_hrefs_visited, external_hrefs_visited, crawling_data)
@@ -73,7 +75,7 @@ async function crawl_site(origin_url, internal_hrefs_visited, external_hrefs_vis
     }
     
     if (crawling_data.pages_crawled >= MAX_PAGES) {
-        console.log(`[INFO]: Reached maximum number of crawlable pages (${MAX_PAGES}).`);
+        console.log(`${INFO}: Reached maximum number of crawlable pages (${MAX_PAGES}).`);
     }
 }
 
@@ -88,10 +90,10 @@ async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_vi
     const { HTML_page, msg } = await fetch_HTML_page(url);
 
     if (!HTML_page && msg) {
-        console.error(`[ERROR]: At page '${parent}' for href '${url.href}'. Message: ${msg}`);
+        console.error(`${ERROR}: At page '${parent}' for href '${url.href}'. Message: ${msg}`);
         return;
     } else if (!HTML_page && !msg) {
-        debuglog(`[INFO]: At page '${parent}' for href '${url.href}'. The resource was successfully fetched, but it is not a HTML page.`);
+        debuglog(`${INFO}: At page '${parent}' for href '${url.href}'. The resource was successfully fetched, but it is not an HTML page.`);
         return;
     }
 
@@ -100,7 +102,7 @@ async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_vi
     const hrefs = collect_hrefs(HTML_page);
     const { internal_hrefs, external_hrefs } = categorize_hrefs(hrefs, url);
 
-    debuglog(`[INFO]: At page '${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
+    debuglog(`${INFO}: At page '${url.href}': Found ${internal_hrefs.length} internal and ${external_hrefs.length} external hrefs.`);
 
     // Process external links
     await check_external_links(external_hrefs, url.href, external_hrefs_visited, crawling_data);
@@ -120,7 +122,7 @@ async function crawl_page(item, queue, internal_hrefs_visited, external_hrefs_vi
                 internal_hrefs_visited.add(abs_url.href);
             }
         } catch (error) {
-            console.error(`[ERROR]: At page '${url.href}': the href '${href}' is not valid. Message: ${error}`);
+            console.error(`${ERROR}: At page '${url.href}': the href '${href}' is not valid. Message: ${error}`);
         }
     }
 }
@@ -139,10 +141,10 @@ async function check_external_links(external_hrefs, page_href, external_hrefs_vi
                     const url = new URL(href);
                     const { is_href_valid, msg } = await check_href_validity(url);
                     if (!is_href_valid) {
-                        console.warn(`[WARN]: Bad response for '${href}' contained in '${page_href}'. Message: ${msg}`);
+                        console.warn(`${WARN}: Bad response for '${href}' contained in '${page_href}'. Message: ${msg}`);
                     }
                 } catch (error) {
-                    console.error(`[ERROR]: At page '${page_href}' for href '${href}'. Message: ${error.message}`);
+                    console.error(`${ERROR}: At page '${page_href}' for href '${href}'. Message: ${error.message}`);
                 }
             })();
         });
@@ -199,7 +201,7 @@ function check_href_validity(url, redirections = 0) {
                     // I set a max number of redirections
                     if (res.headers.location && redirections < 5) {
                         try {
-                            debuglog(`[INFO]: Redirected from '${url.href}' to '${res.headers.location}'`);
+                            debuglog(`${INFO}: Redirected from '${url.href}' to '${res.headers.location}'`);
                             let redirection_url = new URL(res.headers.location);
                             let redirection_res = await check_href_validity(redirection_url, redirections+1);
                             msg = redirection_res.msg;
@@ -391,7 +393,7 @@ function categorize_hrefs(hrefs, url)
 
         href = href.trim();
 
-        // Discard page-internal links
+        // Discard hash links
         if (href.startsWith('#')) return;
 
         try {
@@ -419,7 +421,7 @@ function categorize_hrefs(hrefs, url)
                 internal_hrefs.push(href);
             }
         } catch (error) {
-            console.error(`[ERROR]: At page '${url.href}' for href '${href}': ${error.message}.`);
+            console.error(`${ERROR}: At page '${url.href}' for href '${href}': ${error.message}.`);
         }
     });
         
